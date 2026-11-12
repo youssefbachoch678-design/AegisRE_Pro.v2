@@ -3,12 +3,24 @@ package com.aegisre.pro
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
+data class ManifestComponent(
+    val type: String,
+    val name: String,
+    val exported: Boolean?,
+    val permission: String?
+)
+
 data class ManifestSummary(
     val packageName: String?,
     val versionName: String?,
     val usesPermissions: List<String>,
     val declaredComponents: List<String>,
-    val isBinaryXml: Boolean
+    val isBinaryXml: Boolean,
+    val cleartextTrafficPermitted: Boolean? = null,
+    val debuggable: Boolean? = null,
+    val allowBackup: Boolean? = null,
+    val hasNetworkSecurityConfig: Boolean = false,
+    val components: List<ManifestComponent> = emptyList()
 )
 
 data class ElfSummary(
@@ -25,18 +37,43 @@ object ApkMetadataReader {
         if (!text.trimStart().startsWith("<?xml") && !text.trimStart().startsWith("<manifest")) {
             return ManifestSummary(null, null, emptyList(), emptyList(), true)
         }
+        fun tagText(tag: String): String? =
+            Regex("<$tag\\b[^>]*>", RegexOption.IGNORE_CASE).find(text)?.value
+
         fun attr(tag: String, name: String): String? {
-            val tagMatch = Regex("<$tag\\b[^>]*>", RegexOption.IGNORE_CASE).find(text)?.value ?: return null
+            val source = tagText(tag) ?: return null
             return Regex("(?:android:)?$name\\s*=\\s*[\"']([^\"']*)[\"']", RegexOption.IGNORE_CASE)
-                .find(tagMatch)?.groupValues?.get(1)
+                .find(source)?.groupValues?.get(1)
         }
-        val packageName = attr("manifest", "package")
-        val versionName = attr("manifest", "versionName")
+
         val permissions = Regex("<uses-permission(?:-sdk-\\d+)?\\b[^>]*android:name\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
-            .findAll(text).map { it.groupValues[1] }.distinct().take(200).toList()
-        val components = Regex("<(activity|activity-alias|service|receiver|provider)\\b[^>]*android:name\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
-            .findAll(text).map { "${it.groupValues[1]}: ${it.groupValues[2]}" }.distinct().take(200).toList()
-        return ManifestSummary(packageName, versionName, permissions, components, false)
+            .findAll(text).map { it.groupValues[1] }.distinct().take(300).toList()
+
+        val components = mutableListOf<ManifestComponent>()
+        val componentRegex = Regex("<(activity|activity-alias|service|receiver|provider)\\b([^>]*)>", RegexOption.IGNORE_CASE)
+        componentRegex.findAll(text).take(300).forEach { match ->
+            val type = match.groupValues[1]
+            val attrs = match.groupValues[2]
+            fun componentAttr(name: String): String? =
+                Regex("(?:android:)?$name\\s*=\\s*[\"']([^\"']*)[\"']", RegexOption.IGNORE_CASE)
+                    .find(attrs)?.groupValues?.get(1)
+            val name = componentAttr("name") ?: return@forEach
+            val exported = componentAttr("exported")?.let { it.equals("true", true) }
+            components += ManifestComponent(type, name, exported, componentAttr("permission"))
+        }
+
+        return ManifestSummary(
+            packageName = attr("manifest", "package"),
+            versionName = attr("manifest", "versionName"),
+            usesPermissions = permissions,
+            declaredComponents = components.map { "${it.type}: ${it.name}" }.distinct(),
+            isBinaryXml = false,
+            cleartextTrafficPermitted = attr("application", "usesCleartextTraffic")?.let { it.equals("true", true) },
+            debuggable = attr("application", "debuggable")?.let { it.equals("true", true) },
+            allowBackup = attr("application", "allowBackup")?.let { it.equals("true", true) },
+            hasNetworkSecurityConfig = attr("application", "networkSecurityConfig") != null,
+            components = components
+        )
     }
 
     fun inspectElf(path: String, bytes: ByteArray): ElfSummary? {
