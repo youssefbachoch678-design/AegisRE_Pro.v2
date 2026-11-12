@@ -1,6 +1,7 @@
 package com.aegisre.pro
 
 import android.net.Uri
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -34,13 +35,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val Bg = Color(0xFF0B1018)
-private val Panel = Color(0xFF151E2B)
-private val Panel2 = Color(0xFF1C2938)
-private val Accent = Color(0xFF69D6C7)
-private val Muted = Color(0xFF91A1B5)
-private val MainText = Color(0xFFE7EDF5)
-private val Amber = Color(0xFFE6B86A)
+private val Bg = Color(0xFF080D18)
+private val Panel = Color(0xFF111A2B)
+private val Panel2 = Color(0xFF1B2940)
+private val Accent = Color(0xFF69E0FF)
+private val Muted = Color(0xFF9AAAC2)
+private val MainText = Color(0xFFF0F5FF)
+private val Amber = Color(0xFFFFC66D)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,6 +66,7 @@ private fun AegisWorkbench() {
     var editorOpen by remember { mutableStateOf(false) }
     var editorDiagnostics by remember { mutableStateOf<List<CodeDiagnostic>>(emptyList()) }
     var pendingCode by remember { mutableStateOf("") }
+    var toolsOpen by remember { mutableStateOf(false) }
     val reportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/html")) { uri ->
         if (uri != null) {
             runCatching {
@@ -147,6 +149,9 @@ private fun AegisWorkbench() {
                     }
                     OutlinedButton(onClick = { if (fileInfo?.isProbablyText == true) editorOpen = true else status = "OPEN A TEXT FILE FIRST" }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(4.dp)) {
                         Text("Code editor", fontSize = 10.sp)
+                    }
+                    OutlinedButton(onClick = { toolsOpen = true }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(4.dp)) {
+                        Text("Open-source tools", fontSize = 10.sp)
                     }
                     Spacer(Modifier.height(12.dp))
                     Text("LOADED FILES · ${results.size}", color = Muted, fontSize = 9.sp)
@@ -333,6 +338,32 @@ private fun AegisWorkbench() {
                 Text("AEGISRE · STATIC INSPECTION ONLY", color = Muted, fontSize = 9.sp)
                 Text(if (busy) "BUSY" else "READY", color = Accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
+        }
+        if (toolsOpen) {
+            AlertDialog(
+                onDismissRequest = { toolsOpen = false },
+                containerColor = Panel,
+                title = { Text("OPEN-SOURCE COMPANION TOOLS", color = Accent, fontSize = 14.sp) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("External projects, not bundled engines. Use only with APKs you own or are authorized to inspect.", color = Muted, fontSize = 10.sp)
+                        val toolLinks = listOf(
+                            "JADX · DEX to Java viewer" to "https://github.com/skylot/jadx",
+                            "Apktool · resources and Smali decoding" to "https://github.com/iBotPeaches/Apktool",
+                            "Androguard · APK / DEX static analysis" to "https://github.com/androguard/androguard",
+                            "OWASP MASTG · mobile testing guide" to "https://github.com/OWASP/owasp-mastg",
+                            "MobSF · mobile app security framework" to "https://github.com/MobSF/Mobile-Security-Framework-MobSF"
+                        )
+                        toolLinks.forEach { item ->
+                            Text(item.first, color = MainText, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable {
+                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.second))) }
+                                toolsOpen = false
+                            }.padding(vertical = 5.dp))
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { toolsOpen = false }) { Text("Close", color = Accent) } }
+            )
         }
         if (editorOpen) {
             Dialog(onDismissRequest = { editorOpen = false }) {
