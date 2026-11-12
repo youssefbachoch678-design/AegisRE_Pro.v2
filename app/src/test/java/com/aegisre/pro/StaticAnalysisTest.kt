@@ -40,8 +40,38 @@ class StaticAnalysisTest {
         assertFalse(finding.evidence.contains("AbCdEfGhIjKlMnOpQrSt"))
     }
 
-    @Test fun rejectsNonElfInput() {
+    @Test fun rejectsNonElfAndTruncatedElfHeaders() {
         assertEquals(null, ApkMetadataReader.inspectElf("libfake.so", byteArrayOf(1, 2, 3, 4)))
+        val truncated = ByteArray(20)
+        byteArrayOf(0x7f, 0x45, 0x4c, 0x46, 2, 1, 1).forEachIndexed { index, value ->
+            truncated[index] = value.toByte()
+        }
+        assertEquals(null, ApkMetadataReader.inspectElf("libtruncated.so", truncated))
+    }
+
+    @Test fun acceptsWellFormedMinimalElf64Header() {
+        val bytes = ByteArray(64)
+        byteArrayOf(0x7f, 0x45, 0x4c, 0x46, 2, 1, 1).forEachIndexed { index, value ->
+            bytes[index] = value.toByte()
+        }
+        bytes[16] = 3
+        bytes[18] = 62
+        bytes[20] = 1
+        bytes[52] = 64
+        val result = ApkMetadataReader.inspectElf("libvalid.so", bytes)
+        assertEquals("64-bit", result?.bitness)
+        assertEquals("x86-64", result?.machine)
+        assertEquals("Shared object", result?.fileType)
+    }
+
+    @Test fun rejectsBinaryXmlWithInvalidHeaderSize() {
+        val bytes = ByteArray(8)
+        bytes[0] = 3
+        bytes[1] = 0
+        bytes[2] = 0
+        bytes[3] = 0
+        bytes[4] = 8
+        assertTrue(runCatching { BinaryXmlReader.read(bytes) }.isFailure)
     }
 
     @Test fun decodesDexModifiedUtf8IncludingEncodedNull() {
