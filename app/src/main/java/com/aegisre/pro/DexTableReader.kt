@@ -51,7 +51,7 @@ object DexTableReader {
             val types = ArrayList<String>(typeCount)
             repeat(typeCount) { i ->
                 val descriptorIndex = u32(b, typeOff + i * 4)
-                types += strings.getOrElse(descriptorIndex) { "<invalid-string-index>" }
+                types += strings.getOrElse(descriptorIndex.toInt()) { "<invalid-string-index>" }
             }
 
             val classes = ArrayList<String>()
@@ -66,7 +66,7 @@ object DexTableReader {
                 val classIndex = u16(b, item)
                 val nameIndex = u32(b, item + 4)
                 val owner = types.getOrElse(classIndex) { "<invalid-owner>" }
-                val method = strings.getOrElse(nameIndex) { "<invalid-name>" }
+                val method = strings.getOrElse(nameIndex.toInt()) { "<invalid-name>" }
                 methods += "$owner->$method"
             }
 
