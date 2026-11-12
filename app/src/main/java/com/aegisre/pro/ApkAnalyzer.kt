@@ -31,6 +31,7 @@ data class AnalysisResult(
     val dexBrowse: List<DexBrowseResult> = emptyList(),
     val manifest: ManifestSummary? = null,
     val elfFiles: List<ElfSummary> = emptyList(),
+    val certificates: List<CertificateSummary> = emptyList(),
     val xmlResourcePaths: List<String> = emptyList(),
     val securityFindings: List<SecurityFinding> = emptyList(),
     val warning: String? = null
@@ -58,6 +59,7 @@ object ApkAnalyzer {
             val dexBrowse = mutableListOf<DexBrowseResult>()
             var manifestSummary: ManifestSummary? = null
             val elfFiles = mutableListOf<ElfSummary>()
+            val certificates = mutableListOf<CertificateSummary>()
             val xmlResourcePaths = mutableListOf<String>()
 
             resolver.openInputStream(uri)?.use { raw ->
@@ -82,7 +84,9 @@ object ApkAnalyzer {
                         val header = ByteArray(DEX_HEADER_SIZE)
                         var headerBytes = 0
                         val dexBuffer = if (isDex) ByteArrayOutputStream() else null
-                        val metadataBuffer = if (path == "AndroidManifest.xml" || (path.startsWith("res/") && path.endsWith(".xml")) || path.endsWith(".so")) ByteArrayOutputStream() else null
+                        val certPath = path.uppercase()
+                        val isCertificate = certPath.startsWith("META-INF/") && (certPath.endsWith(".RSA") || certPath.endsWith(".DSA") || certPath.endsWith(".EC"))
+                        val metadataBuffer = if (path == "AndroidManifest.xml" || (path.startsWith("res/") && path.endsWith(".xml")) || path.endsWith(".so") || isCertificate) ByteArrayOutputStream() else null
                         var dexTooLarge = false
                         while (true) {
                             val count = zip.read(buffer)
@@ -106,6 +110,7 @@ object ApkAnalyzer {
                         if (path == "AndroidManifest.xml" && metadataBuffer != null) manifestSummary = ApkMetadataReader.inspectManifest(metadataBuffer.toByteArray())
                         if (path.startsWith("res/") && path.endsWith(".xml") && xmlResourcePaths.size < 500) xmlResourcePaths += path
                         if (path.endsWith(".so") && metadataBuffer != null) ApkMetadataReader.inspectElf(path, metadataBuffer.toByteArray())?.let(elfFiles::add)
+                        if (isCertificate && metadataBuffer != null) certificates += ApkMetadataReader.inspectCertificates(path, metadataBuffer.toByteArray())
                         if (isDex && headerBytes == DEX_HEADER_SIZE) {
                             parseDexHeader(path, header)?.let(dexDetails::add)
                             if (!dexTooLarge && dexBuffer != null) dexBrowse += DexTableReader.inspect(dexBuffer.toByteArray())
@@ -142,6 +147,7 @@ object ApkAnalyzer {
                 dexBrowse = dexBrowse,
                 manifest = manifestSummary,
                 elfFiles = elfFiles.take(200),
+                certificates = certificates.distinctBy { it.sha256 }.take(20),
                 xmlResourcePaths = xmlResourcePaths,
                 securityFindings = SecurityRulesEngine.scan(manifestSummary, dexBrowse.flatMap { it.stringSamples }.distinct().take(2_000))
             )
