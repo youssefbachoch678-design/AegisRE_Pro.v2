@@ -58,6 +58,22 @@ class StaticAnalysisTest {
         assertTrue(result.warning?.contains("outside file") == true)
     }
 
+    @Test fun inspectsZipLikeFileAndComputesSha256() {
+        val info = FileInspector.inspect("demo.apk", byteArrayOf(0x50, 0x4b, 0x03, 0x04))
+        assertEquals("ZIP archive / APK container", info.detectedType)
+        assertEquals(64, info.sha256.length)
+    }
+
+    @Test fun detectsUnclosedOpeningDelimiter() {
+        val diagnostics = CodeDiagnostics.checkDelimiters("fun main() {\\n println(1)\\n")
+        assertTrue(diagnostics.any { it.message.contains("no matching close") })
+    }
+
+    @Test fun ignoresDelimitersInsideStringAndComments() {
+        val source = "val text = \\"{[()]}\\" // }\\n/* { */"
+        assertTrue(CodeDiagnostics.checkDelimiters(source).isEmpty())
+    }
+
     private fun minimalDexWithString(encoded: ByteArray): ByteArray {
         val dataOffset = 116
         val bytes = ByteArray(dataOffset + 1 + encoded.size)
