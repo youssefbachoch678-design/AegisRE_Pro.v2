@@ -127,6 +127,36 @@ object SecurityRulesEngine {
             )
         }
 
+        val webViewIndicators = listOf(
+            "setJavaScriptEnabled" to "JavaScript-enabled WebView API reference detected.",
+            "addJavascriptInterface" to "JavaScript bridge API reference detected.",
+            "setAllowFileAccess" to "WebView file-access configuration API reference detected."
+        )
+        webViewIndicators.forEach { (indicator, explanation) ->
+            if (strings.any { it.contains(indicator, ignoreCase = true) }) {
+                findings += SecurityFinding(
+                    id = "WEBVIEW:$indicator",
+                    title = "WebView security-sensitive API reference",
+                    severity = FindingSeverity.MEDIUM,
+                    confidence = "REVIEW_REQUIRED",
+                    evidence = "DEX string/API reference contains $indicator; runtime configuration and call context are not proven.",
+                    explanation = explanation + " These APIs can be safe when configured carefully; a string match alone does not establish exploitability.",
+                    remediation = "Review the call sites. Disable JavaScript and file access unless required, avoid exposing privileged JavaScript bridges to untrusted content, and restrict WebView navigation."
+                )
+            }
+        }
+        if (strings.any { it.contains("MODE_WORLD_READABLE") || it.contains("MODE_WORLD_WRITEABLE") }) {
+            findings += SecurityFinding(
+                id = "STORAGE:WORLD_ACCESSIBLE",
+                title = "Legacy world-accessible storage flag reference",
+                severity = FindingSeverity.HIGH,
+                confidence = "REVIEW_REQUIRED",
+                evidence = "A DEX string references a legacy MODE_WORLD_* flag; actual use is not confirmed.",
+                explanation = "Legacy world-accessible preferences or files can expose app data to other applications on older Android versions.",
+                remediation = "Use private app storage and modern scoped storage APIs. Verify the reference is not dead code or a documentation string."
+            )
+        }
+
         return findings.distinctBy { it.id }.sortedWith(
             compareBy<SecurityFinding> { it.severity.ordinal }.thenBy { it.title }
         )
