@@ -1,18 +1,28 @@
 # AegisRE Pro
 
-AegisRE Pro is an Android application project for authorized, static inspection of APK files.
+AegisRE Pro is an Android workbench for authorized, offline, static inspection of APK files. It does not install or execute the APK under inspection and does not require root access.
 
-## Initial scope
+## Current capabilities
 
-- Inspect APK metadata without executing the package.
+- Open multiple APK files through Android's document picker.
+- Inspect ZIP entry names, DEX/native-library/asset counts, and native ABI folders.
 - Calculate SHA-256 fingerprints.
-- Report package and manifest metadata when available.
-- Present findings as informational risk indicators, not as a definitive malware verdict.
+- Read DEX headers and bounded DEX tables to display class descriptors, method references, and string samples.
+- Enforce APK size, expanded-data, ZIP-entry, and per-DEX parsing limits.
 
 ## Safety and privacy
 
-Only analyze APK files that you own or are authorized to inspect. The initial version does not execute analyzed apps, bypass protections, or modify target packages.
+- Analysis is local and static; the selected APK is never launched by AegisRE Pro.
+- No root access or network permission is required for the current analysis workflow.
+- Only inspect APKs you own or are authorized to analyze.
+- Results are informational and do not constitute a definitive malware verdict.
 
-## Project status
+## Roadmap
 
-This repository is being initialized. Build configuration, application source, and automated tests will be added in subsequent commits.
+- Complete Smali disassembly and class/method navigation.
+- Manifest and permission inspection.
+- Resource/XML browser.
+- Native ELF metadata viewer.
+- Searchable findings and TXT/HTML report export.
+
+Roadmap items are not claims about features already shipped. Check the release notes and this README for the current implementation status.
