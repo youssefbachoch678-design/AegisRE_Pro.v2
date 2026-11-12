@@ -18,8 +18,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,147 +27,132 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val BackgroundTop = Color(0xFF080D18)
-private val BackgroundBottom = Color(0xFF05070D)
-private val Panel = Color(0xFF141F30)
-private val Accent = Color(0xFF61D5C8)
-private val Muted = Color(0xFF9AA9BD)
-private val Warning = Color(0xFFFFC078)
+private val Bg = Color(0xFF0B1018)
+private val Panel = Color(0xFF151E2B)
+private val Panel2 = Color(0xFF1C2938)
+private val Accent = Color(0xFF69D6C7)
+private val Muted = Color(0xFF91A1B5)
+private val MainText = Color(0xFFE7EDF5)
+private val Amber = Color(0xFFE6B86A)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { AegisHome() }
+        setContent { AegisWorkbench() }
     }
 }
 
 @Composable
-private fun AegisHome() {
+private fun AegisWorkbench() {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var results by remember { mutableStateOf<List<AnalysisResult>>(emptyList()) }
+    var selected by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("Ready for authorized static inspection") }
+    var status by remember { mutableStateOf("WORKSPACE READY · STATIC MODE") }
 
-    val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris: List<Uri> ->
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
         val chosen = uris.take(50)
-        status = if (uris.size > 50) "50-file limit applied" else "${chosen.size} file(s) selected"
         results = emptyList()
+        selected = 0
+        status = "${chosen.size} FILE(S) SELECTED"
         if (chosen.isNotEmpty()) {
             busy = true
             scope.launch {
-                results = withContext(Dispatchers.IO) {
-                    chosen.map { ApkAnalyzer.analyze(context.contentResolver, it) }
-                }
+                results = withContext(Dispatchers.IO) { chosen.map { ApkAnalyzer.analyze(context.contentResolver, it) } }
                 busy = false
-                status = "Analysis complete"
+                status = "ANALYSIS COMPLETE · LOCAL ONLY"
             }
         }
     }
 
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            background = BackgroundBottom, surface = Panel, primary = Accent,
-            onBackground = Color.White, onSurface = Color.White
-        )
-    ) {
-        Scaffold(containerColor = Color.Transparent) { padding ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Brush.verticalGradient(listOf(BackgroundTop, BackgroundBottom)))
-                    .padding(padding),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Security, contentDescription = null, tint = Accent, modifier = Modifier.size(38.dp))
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("AEGISRE PRO", fontSize = 24.sp, fontWeight = FontWeight.Black, color = Color.White)
-                            Text("STATIC APK INTELLIGENCE", fontSize = 11.sp, color = Muted, letterSpacing = 1.8.sp)
+    MaterialTheme(colorScheme = darkColorScheme(background = Bg, surface = Panel, primary = Accent, onBackground = MainText, onSurface = MainText)) {
+        Column(Modifier.fillMaxSize().background(Bg)) {
+            Row(Modifier.fillMaxWidth().background(Panel).padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Security, null, tint = Accent, modifier = Modifier.size(27.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("AEGISRE PRO", color = MainText, fontWeight = FontWeight.Black, fontSize = 17.sp)
+                    Text("ANDROID RESEARCH WORKBENCH", color = Muted, fontSize = 9.sp, letterSpacing = 1.4.sp)
+                }
+                Text(status, color = Accent, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+            }
+            Row(Modifier.fillMaxWidth().weight(1f).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.width(155.dp).fillMaxHeight().background(Panel, RoundedCornerShape(8.dp)).padding(10.dp)) {
+                    Text("PROJECT", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(12.dp))
+                    Text("▾ WORKSPACE", color = MainText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("  APK SAMPLES", color = Muted, fontSize = 10.sp)
+                    Spacer(Modifier.height(14.dp))
+                    Button(onClick = { picker.launch(arrayOf("application/vnd.android.package-archive", "application/octet-stream")) }, enabled = !busy, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(4.dp), colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Bg)) {
+                        Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Open APK", fontSize = 10.sp)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text("LOADED FILES · ${results.size}", color = Muted, fontSize = 9.sp)
+                    LazyColumn {
+                        items(results.indices.toList()) { index ->
+                            Text(results[index].fileName, Modifier.fillMaxWidth().background(if (selected == index) Panel2 else Color.Transparent, RoundedCornerShape(4.dp)).padding(6.dp), color = if (selected == index) Accent else MainText, fontSize = 10.sp, maxLines = 2)
                         }
                     }
                 }
-                item {
-                    Column(Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(24.dp)).padding(20.dp)) {
-                        Text("Inspect. Understand. Verify.", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Inspect APK structure, DEX files, native libraries and CPU architectures without installing or executing the package.",
-                            color = Muted, fontSize = 14.sp, lineHeight = 21.sp
-                        )
-                        Spacer(Modifier.height(18.dp))
-                        Button(
-                            onClick = { picker.launch(arrayOf("application/vnd.android.package-archive", "application/octet-stream")) },
-                            enabled = !busy,
-                            modifier = Modifier.fillMaxWidth().height(54.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = BackgroundBottom)
-                        ) {
-                            Icon(Icons.Default.FolderOpen, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Choose APK files", fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Text(status, color = Muted, fontSize = 12.sp)
-                        if (busy) {
+                Column(Modifier.weight(1.15f).fillMaxHeight().background(Panel, RoundedCornerShape(8.dp)).padding(12.dp)) {
+                    Text("ANALYSIS OVERVIEW", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(10.dp))
+                    if (busy) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth(), color = Accent)
+                        Text("Inspecting package structure…", color = Muted, fontSize = 11.sp)
+                    } else if (results.isEmpty()) {
+                        Text("No APK loaded", color = MainText, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                        Text("Open an APK to populate the workspace.", color = Muted, fontSize = 12.sp)
+                    } else {
+                        val result = results.getOrNull(selected)
+                        if (result != null) {
+                            Text(result.fileName, color = MainText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                             Spacer(Modifier.height(10.dp))
-                            LinearProgressIndicator(Modifier.fillMaxWidth(), color = Accent)
-                        }
-                    }
-                }
-                items(results) { result ->
-                    Column(Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(20.dp)).padding(18.dp)) {
-                        Text(result.fileName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Spacer(Modifier.height(12.dp))
-                        if (result.warning != null) {
-                            Text("Could not analyze: ${result.warning}", color = Warning, fontSize = 13.sp)
-                        } else {
-                            Metric("DEX files", result.dexFiles.toString())
-                            Metric("Native libraries", result.nativeLibraries.toString())
-                            Metric("Asset files", result.assetFiles.toString())
-                            Metric("Total ZIP entries", result.totalEntries.toString())
-                            Spacer(Modifier.height(12.dp))
-                            Text("NATIVE CPU ARCHITECTURES", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                            if (result.abiCounts.isEmpty()) {
-                                Text("No native .so libraries found", color = Muted, fontSize = 12.sp)
-                            } else {
-                                result.abiCounts.forEach { (abi, count) -> Metric(abi, "$count libraries") }
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            Text("SHA-256", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(result.sha256, color = Muted, fontSize = 11.sp, lineHeight = 17.sp)
-                            Spacer(Modifier.height(14.dp))
-                            Text("FILE INVENTORY · ${result.entryNames.size} recorded", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.height(6.dp))
-                            result.entryNames.take(40).forEach { path ->
-                                Text(path, color = Muted, fontSize = 10.sp, lineHeight = 14.sp)
-                            }
-                            if (result.entryNames.size > 40) {
-                                Text("…and ${result.entryNames.size - 40} more recorded paths", color = Muted, fontSize = 10.sp)
+                            if (result.warning != null) Text(result.warning, color = Amber, fontSize = 11.sp) else {
+                                WorkMetric("DEX modules", result.dexFiles.toString())
+                                WorkMetric("Native libraries", result.nativeLibraries.toString())
+                                WorkMetric("Assets", result.assetFiles.toString())
+                                WorkMetric("ZIP entries", result.totalEntries.toString())
+                                Spacer(Modifier.height(12.dp))
+                                Text("NATIVE ABI TARGETS", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                if (result.abiCounts.isEmpty()) Text("No .so libraries detected", color = Muted, fontSize = 11.sp)
+                                result.abiCounts.forEach { (abi, count) -> WorkMetric(abi, "$count libraries") }
+                                Spacer(Modifier.height(12.dp))
+                                Text("SHA-256", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(result.sha256, color = Muted, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
                             }
                         }
                     }
                 }
-                item {
-                    Text(
-                        "Preliminary static indicators only — not a definitive malware verdict. APK files are analyzed locally and are not uploaded.",
-                        color = Muted, fontSize = 11.sp, lineHeight = 17.sp
-                    )
+                Column(Modifier.weight(1f).fillMaxHeight().background(Panel, RoundedCornerShape(8.dp)).padding(10.dp)) {
+                    val result = results.getOrNull(selected)
+                    Text("PROGRAM TREE / ZIP CONTENTS", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    if (result == null) Text("File paths appear here after analysis.", color = Muted, fontSize = 11.sp) else {
+                        Text("${result.entryNames.size} paths recorded · up to 2,000", color = Muted, fontSize = 9.sp)
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            items(result.entryNames) { path ->
+                                Text("› $path", color = if (path.endsWith(".dex") || path.endsWith(".so")) Accent else MainText, fontSize = 9.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
+                            }
+                        }
+                    }
                 }
+            }
+            Row(Modifier.fillMaxWidth().background(Panel).padding(horizontal = 12.dp, vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("AEGISRE · STATIC INSPECTION ONLY", color = Muted, fontSize = 9.sp)
+                Text(if (busy) "BUSY" else "READY", color = Accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
 @Composable
-private fun Metric(label: String, value: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = Muted, fontSize = 13.sp)
-        Text(value, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+private fun WorkMetric(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = Muted, fontSize = 11.sp)
+        Text(value, color = MainText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
     }
 }
