@@ -29,7 +29,7 @@ object SecurityRulesEngine {
 
     fun scan(manifest: ManifestSummary?, strings: List<String>): List<SecurityFinding> {
         val findings = mutableListOf<SecurityFinding>()
-        if (manifest != null && !manifest.isBinaryXml) {
+        if (manifest != null) {
             manifest.usesPermissions.distinct().forEach { permission ->
                 val rule = sensitivePermissions[permission] ?: return@forEach
                 findings += SecurityFinding(
