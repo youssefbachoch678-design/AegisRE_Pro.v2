@@ -2,6 +2,10 @@ package com.aegisre.pro
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.security.MessageDigest
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
+import java.io.ByteArrayInputStream
 
 data class ManifestComponent(
     val type: String,
@@ -23,7 +27,7 @@ data class ManifestSummary(
     val components: List<ManifestComponent> = emptyList()
 )
 
-data class ElfSummary(
+data class CertificateSummary(\n    val path: String,\n    val subject: String,\n    val issuer: String,\n    val validFrom: String,\n    val validUntil: String,\n    val sha256: String\n)\n\ndata class ElfSummary(
     val path: String,
     val bitness: String,
     val endianness: String,
@@ -96,6 +100,26 @@ object ApkMetadataReader {
             hasNetworkSecurityConfig = attr("application", "networkSecurityConfig") != null,
             components = components
         )
+    }
+
+    fun inspectCertificates(path: String, bytes: ByteArray): List<CertificateSummary> {
+        return try {
+            val factory = CertificateFactory.getInstance("X.509")
+            factory.generateCertificates(ByteArrayInputStream(bytes)).filterIsInstance<X509Certificate>()
+                .take(10).map { cert ->
+                    CertificateSummary(
+                        path,
+                        cert.subjectX500Principal.name,
+                        cert.issuerX500Principal.name,
+                        cert.notBefore.toInstant().toString(),
+                        cert.notAfter.toInstant().toString(),
+                        MessageDigest.getInstance("SHA-256").digest(cert.encoded)
+                            .joinToString("") { "%02X".format(it) }
+                    )
+                }
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     fun inspectElf(path: String, bytes: ByteArray): ElfSummary? {
