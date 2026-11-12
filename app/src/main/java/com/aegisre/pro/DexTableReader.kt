@@ -45,7 +45,8 @@ object DexTableReader {
             val strings = ArrayList<String>(stringCount)
             repeat(stringCount) { i ->
                 val dataOff = u32(b, stringOff + i * 4)
-                strings += readDexString(bytes, dataOff)
+                require(dataOff <= Int.MAX_VALUE.toLong()) { "DEX string offset is too large" }
+                strings += readDexString(bytes, dataOff.toInt())
             }
 
             val types = ArrayList<String>(typeCount)
