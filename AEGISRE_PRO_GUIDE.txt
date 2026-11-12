@@ -1,0 +1,45 @@
+AEGISRE PRO — TOOL GUIDE
+========================
+
+WHAT IS AEGISRE PRO?
+AegisRE Pro is an Android workbench for authorized, offline, static inspection of APK files. It is intended for learning, defensive security research, and examining apps that you own or have permission to analyze.
+
+CORE PRINCIPLES
+- No root access is required.
+- APK analysis is performed locally on the device.
+- The app does not execute the APK being inspected.
+- No internet connection is required for local analysis after installation.
+- Findings are informational indicators, not a final malware verdict.
+- Analyze only apps and files that you own or are authorized to inspect.
+
+CURRENT FEATURES
+- Open one or more APK files using Android's document picker.
+- Read the APK as a ZIP archive without installing or launching it.
+- Count DEX files, native shared libraries, assets, and ZIP entries.
+- Identify native library ABI folders.
+- Calculate the APK SHA-256 fingerprint.
+- Display a limited list of internal file paths.
+- Apply file-size, expanded-data, and entry-count limits to reduce resource-exhaustion risk.
+
+PLANNED ANALYSIS MODULES
+1. DEX Explorer: inspect DEX headers and metadata, then browse classes, methods, and fields.
+2. Smali Viewer: display disassembled code as readable text.
+3. Manifest Inspector: inspect package metadata, permissions, and declared components.
+4. Resource Browser: inspect resource names and XML files.
+5. Native Library Inspector: inspect ELF metadata and ABI information.
+6. Search and Reports: search extracted metadata and export clear TXT/HTML reports.
+
+OFFLINE LIBRARIES
+Where practical, compatible open-source libraries will be bundled with the application at build time. They will not be downloaded dynamically while analyzing an APK. Every dependency must be checked for Android compatibility and its license before inclusion.
+
+LIMITATIONS
+- Features listed as planned are not necessarily available in the current build.
+- Static analysis cannot prove that an app is safe or malicious.
+- Some APK formats, obfuscation methods, or unusual files may limit what can be displayed.
+- Analysis limits may cause very large APKs to be rejected.
+
+SAFE USE
+Use AegisRE Pro only for authorized analysis. Do not use it to tamper with apps, bypass access controls, or inspect software without permission.
+
+PROJECT STATUS
+This is an evolving project. Check the repository's README and release notes for the features included in each version.
