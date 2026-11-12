@@ -57,7 +57,7 @@ object DexTableReader {
             val classes = ArrayList<String>()
             repeat(classCount) { i ->
                 val typeIndex = u32(b, classOff + i * 32)
-                classes += types.getOrElse(typeIndex) { "<invalid-type-index>" }
+                classes += types.getOrElse(typeIndex.toInt()) { "<invalid-type-index>" }
             }
 
             val methods = ArrayList<String>()
