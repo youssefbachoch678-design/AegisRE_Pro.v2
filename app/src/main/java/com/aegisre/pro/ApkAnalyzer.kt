@@ -32,6 +32,7 @@ data class AnalysisResult(
     val manifest: ManifestSummary? = null,
     val elfFiles: List<ElfSummary> = emptyList(),
     val xmlResourcePaths: List<String> = emptyList(),
+    val securityFindings: List<SecurityFinding> = emptyList(),
     val warning: String? = null
 )
 
@@ -141,7 +142,8 @@ object ApkAnalyzer {
                 dexBrowse = dexBrowse,
                 manifest = manifestSummary,
                 elfFiles = elfFiles.take(200),
-                xmlResourcePaths = xmlResourcePaths
+                xmlResourcePaths = xmlResourcePaths,
+                securityFindings = SecurityRulesEngine.scan(manifestSummary, dexBrowse.flatMap { it.stringSamples }.distinct().take(2_000))
             )
         } catch (error: Exception) {
             AnalysisResult(name, "", 0, 0, 0, 0, warning = error.message ?: "Analysis failed")
