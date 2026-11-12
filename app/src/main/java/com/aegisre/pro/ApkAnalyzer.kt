@@ -2,8 +2,20 @@ package com.aegisre.pro
 
 import android.content.ContentResolver
 import android.net.Uri
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.security.MessageDigest
 import java.util.zip.ZipInputStream
+
+data class DexInfo(
+    val fileName: String,
+    val version: String,
+    val fileSize: Long,
+    val stringCount: Long,
+    val typeCount: Long,
+    val methodCount: Long,
+    val classCount: Long
+)
 
 data class AnalysisResult(
     val fileName: String,
@@ -14,6 +26,7 @@ data class AnalysisResult(
     val totalEntries: Int,
     val abiCounts: Map<String, Int> = emptyMap(),
     val entryNames: List<String> = emptyList(),
+    val dexDetails: List<DexInfo> = emptyList(),
     val warning: String? = null
 )
 
@@ -22,6 +35,7 @@ object ApkAnalyzer {
     private const val MAX_EXPANDED_BYTES = 100L * 1024 * 1024
     private const val MAX_ENTRIES = 10_000
     private const val MAX_RECORDED_NAMES = 2_000
+    private const val DEX_HEADER_SIZE = 112
 
     fun analyze(resolver: ContentResolver, uri: Uri): AnalysisResult {
         val name = uri.lastPathSegment?.substringAfterLast('/') ?: "Selected APK"
@@ -33,6 +47,7 @@ object ApkAnalyzer {
             var expanded = 0L
             val abiCounts = linkedMapOf<String, Int>()
             val entryNames = mutableListOf<String>()
+            val dexDetails = mutableListOf<DexInfo>()
 
             resolver.openInputStream(uri)?.use { raw ->
                 ZipInputStream(raw).use { zip ->
@@ -43,7 +58,8 @@ object ApkAnalyzer {
                         require(entries <= MAX_ENTRIES) { "Too many ZIP entries (limit: $MAX_ENTRIES)" }
                         val path = entry.name
                         if (entryNames.size < MAX_RECORDED_NAMES) entryNames += path
-                        if (path.matches(Regex("classes(\\d*)\\.dex"))) dex++
+                        val isDex = path.matches(Regex("classes(\\d*)\\.dex"))
+                        if (isDex) dex++
                         if (path.startsWith("assets/")) assets++
                         val parts = path.split('/')
                         if (parts.size >= 3 && parts[0] == "lib" && parts.last().endsWith(".so")) {
@@ -51,11 +67,22 @@ object ApkAnalyzer {
                             val abi = parts[1]
                             abiCounts[abi] = (abiCounts[abi] ?: 0) + 1
                         }
+
+                        val header = ByteArray(DEX_HEADER_SIZE)
+                        var headerBytes = 0
                         while (true) {
                             val count = zip.read(buffer)
                             if (count < 0) break
                             expanded += count
                             require(expanded <= MAX_EXPANDED_BYTES) { "Expanded data limit exceeded (100 MB safety limit)" }
+                            if (isDex && headerBytes < DEX_HEADER_SIZE) {
+                                val copyCount = minOf(count, DEX_HEADER_SIZE - headerBytes)
+                                buffer.copyInto(header, headerBytes, 0, copyCount)
+                                headerBytes += copyCount
+                            }
+                        }
+                        if (isDex && headerBytes == DEX_HEADER_SIZE) {
+                            parseDexHeader(path, header)?.let(dexDetails::add)
                         }
                         zip.closeEntry()
                     }
@@ -83,10 +110,36 @@ object ApkAnalyzer {
                 assetFiles = assets,
                 totalEntries = entries,
                 abiCounts = abiCounts.toSortedMap(),
-                entryNames = entryNames
+                entryNames = entryNames,
+                dexDetails = dexDetails
             )
         } catch (error: Exception) {
             AnalysisResult(name, "", 0, 0, 0, 0, warning = error.message ?: "Analysis failed")
         }
+    }
+
+    private fun parseDexHeader(path: String, header: ByteArray): DexInfo? {
+        if (header[0] != 'd'.code.toByte() ||
+            header[1] != 'e'.code.toByte() ||
+            header[2] != 'x'.code.toByte() ||
+            header[3] != 10.toByte() ||
+            header[7] != 0.toByte()
+        ) return null
+
+        val version = header.copyOfRange(4, 7).toString(Charsets.US_ASCII)
+        val data = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
+        val headerSize = data.getInt(36).toLong() and 0xffffffffL
+        val endianTag = data.getInt(40).toLong() and 0xffffffffL
+        if (headerSize != DEX_HEADER_SIZE.toLong() || endianTag != 0x12345678L) return null
+
+        return DexInfo(
+            fileName = path,
+            version = version,
+            fileSize = data.getInt(32).toLong() and 0xffffffffL,
+            stringCount = data.getInt(56).toLong() and 0xffffffffL,
+            typeCount = data.getInt(64).toLong() and 0xffffffffL,
+            methodCount = data.getInt(88).toLong() and 0xffffffffL,
+            classCount = data.getInt(96).toLong() and 0xffffffffL
+        )
     }
 }
