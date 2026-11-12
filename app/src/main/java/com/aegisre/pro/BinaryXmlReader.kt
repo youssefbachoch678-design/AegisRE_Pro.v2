@@ -17,6 +17,7 @@ internal object BinaryXmlReader {
         val documentSize = u32(b, 4).toInt()
         require(documentSize in 8..bytes.size) { "Invalid binary XML size" }
         var cursor = u16(b, 2)
+        require(cursor >= 8 && cursor <= documentSize) { "Invalid binary XML header size" }
         var strings: List<String> = emptyList()
         val elements = mutableListOf<Element>()
         while (cursor + 8 <= documentSize) {
@@ -75,19 +76,21 @@ internal object BinaryXmlReader {
         val utf8 = flags and 0x100L != 0L
         return (0 until count).map { index ->
             val relative = u32(b, start + 28 + index * 4).toInt()
-            val pos = start + stringsStart + relative
-            require(pos in start until start + chunkSize) { "String offset outside pool" }
+            val posLong = start.toLong() + stringsStart.toLong() + relative.toLong()
+            require(posLong >= start.toLong() && posLong < start.toLong() + chunkSize) { "String offset outside pool" }
+            val pos = posLong.toInt()
+            val poolEnd = start + chunkSize
             if (utf8) {
                 var p = pos
-                p += decodeLength8(b, p).second
-                val (byteLength, used) = decodeLength8(b, p)
+                p += decodeLength8(b, p, poolEnd).second
+                val (byteLength, used) = decodeLength8(b, p, poolEnd)
                 p += used
                 require(p.toLong() + byteLength <= start + chunkSize) { "UTF-8 string outside pool" }
                 val data = ByteArray(byteLength) { b.get(p + it) }
                 String(data, Charsets.UTF_8)
             } else {
                 var p = pos
-                val (charLength, used) = decodeLength16(b, p)
+                val (charLength, used) = decodeLength16(b, p, poolEnd)
                 p += used
                 require(p.toLong() + charLength.toLong() * 2 <= start + chunkSize) { "UTF-16 string outside pool" }
                 val chars = CharArray(charLength) { b.getShort(p + it * 2).toInt().toChar() }
@@ -96,18 +99,20 @@ internal object BinaryXmlReader {
         }
     }
 
-    private fun decodeLength8(b: ByteBuffer, offset: Int): Pair<Int, Int> {
+    private fun decodeLength8(b: ByteBuffer, offset: Int, end: Int): Pair<Int, Int> {
+        require(offset >= 0 && offset < end) { "String length outside pool" }
         val first = b.get(offset).toInt() and 0xff
-        return if (first and 0x80 == 0) first to 1 else {
-            (((first and 0x7f) shl 8) or (b.get(offset + 1).toInt() and 0xff)) to 2
-        }
+        if (first and 0x80 == 0) return first to 1
+        require(offset + 1 < end) { "Truncated string length" }
+        return (((first and 0x7f) shl 8) or (b.get(offset + 1).toInt() and 0xff)) to 2
     }
 
-    private fun decodeLength16(b: ByteBuffer, offset: Int): Pair<Int, Int> {
+    private fun decodeLength16(b: ByteBuffer, offset: Int, end: Int): Pair<Int, Int> {
+        require(offset >= 0 && offset.toLong() + 2 <= end) { "String length outside pool" }
         val first = u16(b, offset)
-        return if (first and 0x8000 == 0) first to 2 else {
-            (((first and 0x7fff) shl 16) or u16(b, offset + 2)) to 4
-        }
+        if (first and 0x8000 == 0) return first to 2
+        require(offset.toLong() + 4 <= end) { "Truncated string length" }
+        return (((first and 0x7fff) shl 16) or u16(b, offset + 2)) to 4
     }
 
     private fun u16(b: ByteBuffer, offset: Int): Int {
