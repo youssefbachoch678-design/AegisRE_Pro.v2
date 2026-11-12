@@ -16,6 +16,8 @@ AegisRE Pro is an Android workbench for authorized, offline, static inspection o
 - Display findings with severity, confidence label, evidence, explanation, and remediation guidance.
 - Enforce APK size, expanded-data, ZIP-entry, and per-DEX parsing limits.
 
+- Open-source companion-tool directory links to JADX, Apktool, Androguard, OWASP MASTG, and MobSF. These are external references and are not embedded engines in this Android app.
+
 ## Known limitations
 
 - Binary AndroidManifest XML support is partial; resource IDs, namespaces, and all typed values are not comprehensively resolved. Parse failures may result in incomplete metadata.
