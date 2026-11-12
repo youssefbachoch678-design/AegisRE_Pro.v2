@@ -7,6 +7,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -98,6 +101,7 @@ private fun AegisWorkbench() {
                                 results[index].fileName,
                                 Modifier.fillMaxWidth()
                                     .background(if (selected == index) Panel2 else Color.Transparent, RoundedCornerShape(4.dp))
+                                    .clickable { selected = index; pathQuery = "" }
                                     .padding(6.dp),
                                 color = if (selected == index) Accent else MainText,
                                 fontSize = 10.sp,
@@ -106,7 +110,7 @@ private fun AegisWorkbench() {
                         }
                     }
                 }
-                Column(Modifier.weight(1.15f).fillMaxHeight().background(Panel, RoundedCornerShape(8.dp)).padding(12.dp)) {
+                Column(Modifier.weight(1.15f).fillMaxHeight().background(Panel, RoundedCornerShape(8.dp)).verticalScroll(rememberScrollState()).padding(12.dp)) {
                     Text("ANALYSIS OVERVIEW", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(10.dp))
                     if (busy) {
