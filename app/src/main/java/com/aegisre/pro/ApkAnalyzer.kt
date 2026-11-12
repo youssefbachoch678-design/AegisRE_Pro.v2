@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.net.Uri
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 
@@ -27,6 +28,7 @@ data class AnalysisResult(
     val abiCounts: Map<String, Int> = emptyMap(),
     val entryNames: List<String> = emptyList(),
     val dexDetails: List<DexInfo> = emptyList(),
+    val dexBrowse: List<DexBrowseResult> = emptyList(),
     val warning: String? = null
 )
 
@@ -36,6 +38,7 @@ object ApkAnalyzer {
     private const val MAX_ENTRIES = 10_000
     private const val MAX_RECORDED_NAMES = 2_000
     private const val DEX_HEADER_SIZE = 112
+    private const val MAX_DEX_PARSE_BYTES = 24 * 1024 * 1024
 
     fun analyze(resolver: ContentResolver, uri: Uri): AnalysisResult {
         val name = uri.lastPathSegment?.substringAfterLast('/') ?: "Selected APK"
@@ -48,6 +51,7 @@ object ApkAnalyzer {
             val abiCounts = linkedMapOf<String, Int>()
             val entryNames = mutableListOf<String>()
             val dexDetails = mutableListOf<DexInfo>()
+            val dexBrowse = mutableListOf<DexBrowseResult>()
 
             resolver.openInputStream(uri)?.use { raw ->
                 ZipInputStream(raw).use { zip ->
@@ -70,11 +74,17 @@ object ApkAnalyzer {
 
                         val header = ByteArray(DEX_HEADER_SIZE)
                         var headerBytes = 0
+                        val dexBuffer = if (isDex) ByteArrayOutputStream() else null
+                        var dexTooLarge = false
                         while (true) {
                             val count = zip.read(buffer)
                             if (count < 0) break
                             expanded += count
                             require(expanded <= MAX_EXPANDED_BYTES) { "Expanded data limit exceeded (100 MB safety limit)" }
+                            if (isDex && !dexTooLarge && dexBuffer != null) {
+                                if (dexBuffer.size().toLong() + count <= MAX_DEX_PARSE_BYTES) dexBuffer.write(buffer, 0, count)
+                                else dexTooLarge = true
+                            }
                             if (isDex && headerBytes < DEX_HEADER_SIZE) {
                                 val copyCount = minOf(count, DEX_HEADER_SIZE - headerBytes)
                                 buffer.copyInto(header, headerBytes, 0, copyCount)
@@ -83,6 +93,8 @@ object ApkAnalyzer {
                         }
                         if (isDex && headerBytes == DEX_HEADER_SIZE) {
                             parseDexHeader(path, header)?.let(dexDetails::add)
+                            if (!dexTooLarge && dexBuffer != null) dexBrowse += DexTableReader.inspect(dexBuffer.toByteArray())
+                            else dexBrowse += DexBrowseResult(emptyList(), emptyList(), emptyList(), "DEX exceeds the 24 MB per-file inspection limit")
                         }
                         zip.closeEntry()
                     }
@@ -111,7 +123,8 @@ object ApkAnalyzer {
                 totalEntries = entries,
                 abiCounts = abiCounts.toSortedMap(),
                 entryNames = entryNames,
-                dexDetails = dexDetails
+                dexDetails = dexDetails,
+                dexBrowse = dexBrowse
             )
         } catch (error: Exception) {
             AnalysisResult(name, "", 0, 0, 0, 0, warning = error.message ?: "Analysis failed")
