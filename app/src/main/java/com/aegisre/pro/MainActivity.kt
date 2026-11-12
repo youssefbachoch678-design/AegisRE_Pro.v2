@@ -93,7 +93,15 @@ private fun AegisWorkbench() {
                     Text("LOADED FILES · ${results.size}", color = Muted, fontSize = 9.sp)
                     LazyColumn {
                         items(results.indices.toList()) { index ->
-                            Text(results[index].fileName, Modifier.fillMaxWidth().background(if (selected == index) Panel2 else Color.Transparent, RoundedCornerShape(4.dp)).padding(6.dp), color = if (selected == index) Accent else MainText, fontSize = 10.sp, maxLines = 2)
+                            Text(
+                                results[index].fileName,
+                                Modifier.fillMaxWidth()
+                                    .background(if (selected == index) Panel2 else Color.Transparent, RoundedCornerShape(4.dp))
+                                    .padding(6.dp),
+                                color = if (selected == index) Accent else MainText,
+                                fontSize = 10.sp,
+                                maxLines = 2
+                            )
                         }
                     }
                 }
@@ -116,6 +124,18 @@ private fun AegisWorkbench() {
                                 WorkMetric("Native libraries", result.nativeLibraries.toString())
                                 WorkMetric("Assets", result.assetFiles.toString())
                                 WorkMetric("ZIP entries", result.totalEntries.toString())
+                                Spacer(Modifier.height(12.dp))
+                                Text("DEX HEADER SUMMARY", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                if (result.dexDetails.isEmpty()) {
+                                    Text("No valid standard DEX headers found.", color = Muted, fontSize = 10.sp)
+                                }
+                                result.dexDetails.forEach { dexInfo ->
+                                    Text(dexInfo.fileName, color = MainText, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                                    WorkMetric("  DEX version", dexInfo.version)
+                                    WorkMetric("  Classes", dexInfo.classCount.toString())
+                                    WorkMetric("  Methods", dexInfo.methodCount.toString())
+                                    WorkMetric("  Types / strings", "${dexInfo.typeCount} / ${dexInfo.stringCount}")
+                                }
                                 Spacer(Modifier.height(12.dp))
                                 Text("NATIVE ABI TARGETS", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 if (result.abiCounts.isEmpty()) Text("No .so libraries detected", color = Muted, fontSize = 11.sp)
