@@ -43,4 +43,41 @@ class StaticAnalysisTest {
     @Test fun rejectsNonElfInput() {
         assertEquals(null, ApkMetadataReader.inspectElf("libfake.so", byteArrayOf(1, 2, 3, 4)))
     }
+
+    @Test fun decodesDexModifiedUtf8IncludingEncodedNull() {
+        val bytes = minimalDexWithString(byteArrayOf(0x41, 0xc0.toByte(), 0x80.toByte(), 0x42, 0))
+        val result = DexTableReader.inspect(bytes)
+        assertEquals(listOf("A\u0000B"), result.stringSamples)
+        assertEquals(null, result.warning)
+    }
+
+    @Test fun rejectsDexTablesOutsideDeclaredFileSize() {
+        val bytes = minimalDexWithString(byteArrayOf(0x41, 0x42, 0x43, 0))
+        putU32(bytes, 32, 112)
+        val result = DexTableReader.inspect(bytes)
+        assertTrue(result.warning?.contains("outside file") == true)
+    }
+
+    private fun minimalDexWithString(encoded: ByteArray): ByteArray {
+        val dataOffset = 116
+        val bytes = ByteArray(dataOffset + 1 + encoded.size)
+        bytes[0] = 'd'.code.toByte()
+        bytes[1] = 'e'.code.toByte()
+        bytes[2] = 'x'.code.toByte()
+        bytes[3] = 10
+        bytes[7] = 0
+        putU32(bytes, 32, bytes.size)
+        putU32(bytes, 36, 112)
+        putU32(bytes, 40, 0x12345678)
+        putU32(bytes, 56, 1)
+        putU32(bytes, 60, 112)
+        putU32(bytes, 112, dataOffset)
+        bytes[dataOffset] = 3
+        encoded.copyInto(bytes, dataOffset + 1)
+        return bytes
+    }
+
+    private fun putU32(bytes: ByteArray, offset: Int, value: Int) {
+        for (i in 0 until 4) bytes[offset + i] = (value ushr (i * 8)).toByte()
+    }
 }
