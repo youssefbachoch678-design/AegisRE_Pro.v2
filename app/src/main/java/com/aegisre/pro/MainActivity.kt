@@ -56,6 +56,14 @@ private fun AegisWorkbench() {
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("WORKSPACE READY · STATIC MODE") }
     var pathQuery by remember { mutableStateOf("") }
+    var pendingReport by remember { mutableStateOf("") }
+    val reportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/html")) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(pendingReport.toByteArray(Charsets.UTF_8)) }
+            }
+        }
+    }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
         val chosen = uris.take(50)
@@ -125,6 +133,14 @@ private fun AegisWorkbench() {
                         val result = results.getOrNull(selected)
                         if (result != null) {
                             Text(result.fileName, color = MainText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = {
+                                    pendingReport = HtmlReportRenderer.render(result)
+                                    reportLauncher.launch(result.fileName.substringBeforeLast('.', result.fileName) + "-aegisre-report.html")
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(6.dp)
+                            ) { Text("Export HTML report", fontSize = 10.sp) }
                             Spacer(Modifier.height(10.dp))
                             if (result.warning != null) Text(result.warning, color = Amber, fontSize = 11.sp) else {
                                 WorkMetric("DEX modules", result.dexFiles.toString())
