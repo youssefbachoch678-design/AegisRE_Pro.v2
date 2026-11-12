@@ -132,12 +132,18 @@ object ApkMetadataReader {
     }
 
     fun inspectElf(path: String, bytes: ByteArray): ElfSummary? {
-        if (bytes.size < 20 || bytes[0] != 0x7f.toByte() || bytes[1] != 'E'.code.toByte() ||
+        if (bytes.size < 16 || bytes[0] != 0x7f.toByte() || bytes[1] != 'E'.code.toByte() ||
             bytes[2] != 'L'.code.toByte() || bytes[3] != 'F'.code.toByte()) return null
-        val bitness = when (bytes[4].toInt() and 0xff) { 1 -> "32-bit"; 2 -> "64-bit"; else -> "Unknown" }
+        val elfClass = bytes[4].toInt() and 0xff
+        val bitness = when (elfClass) { 1 -> "32-bit"; 2 -> "64-bit"; else -> return null }
+        val expectedHeaderSize = if (elfClass == 1) 52 else 64
+        if (bytes.size < expectedHeaderSize || (bytes[6].toInt() and 0xff) != 1) return null
         val endian = when (bytes[5].toInt() and 0xff) { 1 -> "Little-endian"; 2 -> "Big-endian"; else -> return null }
         val order = if (endian == "Little-endian") ByteOrder.LITTLE_ENDIAN else ByteOrder.BIG_ENDIAN
         val b = ByteBuffer.wrap(bytes).order(order)
+        if (b.getInt(20) != 1) return null
+        val declaredHeaderSize = b.getShort(if (elfClass == 1) 40 else 52).toInt() and 0xffff
+        if (declaredHeaderSize != expectedHeaderSize) return null
         val type = when (b.getShort(16).toInt() and 0xffff) {
             1 -> "Relocatable"; 2 -> "Executable"; 3 -> "Shared object"; 4 -> "Core"; else -> "Other"
         }
