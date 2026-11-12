@@ -29,6 +29,9 @@ data class AnalysisResult(
     val entryNames: List<String> = emptyList(),
     val dexDetails: List<DexInfo> = emptyList(),
     val dexBrowse: List<DexBrowseResult> = emptyList(),
+    val manifest: ManifestSummary? = null,
+    val elfFiles: List<ElfSummary> = emptyList(),
+    val xmlResourcePaths: List<String> = emptyList(),
     val warning: String? = null
 )
 
@@ -52,6 +55,9 @@ object ApkAnalyzer {
             val entryNames = mutableListOf<String>()
             val dexDetails = mutableListOf<DexInfo>()
             val dexBrowse = mutableListOf<DexBrowseResult>()
+            var manifestSummary: ManifestSummary? = null
+            val elfFiles = mutableListOf<ElfSummary>()
+            val xmlResourcePaths = mutableListOf<String>()
 
             resolver.openInputStream(uri)?.use { raw ->
                 ZipInputStream(raw).use { zip ->
@@ -75,12 +81,17 @@ object ApkAnalyzer {
                         val header = ByteArray(DEX_HEADER_SIZE)
                         var headerBytes = 0
                         val dexBuffer = if (isDex) ByteArrayOutputStream() else null
+                        val metadataBuffer = if (path == "AndroidManifest.xml" || (path.startsWith("res/") && path.endsWith(".xml")) || path.endsWith(".so")) ByteArrayOutputStream() else null
                         var dexTooLarge = false
                         while (true) {
                             val count = zip.read(buffer)
                             if (count < 0) break
                             expanded += count
                             require(expanded <= MAX_EXPANDED_BYTES) { "Expanded data limit exceeded (100 MB safety limit)" }
+                            if (metadataBuffer != null && metadataBuffer.size() < 1024 * 1024) {
+                                val keep = minOf(count, 1024 * 1024 - metadataBuffer.size())
+                                if (keep > 0) metadataBuffer.write(buffer, 0, keep)
+                            }
                             if (isDex && !dexTooLarge && dexBuffer != null) {
                                 if (dexBuffer.size().toLong() + count <= MAX_DEX_PARSE_BYTES) dexBuffer.write(buffer, 0, count)
                                 else dexTooLarge = true
@@ -91,6 +102,9 @@ object ApkAnalyzer {
                                 headerBytes += copyCount
                             }
                         }
+                        if (path == "AndroidManifest.xml" && metadataBuffer != null) manifestSummary = ApkMetadataReader.inspectManifest(metadataBuffer.toByteArray())
+                        if (path.startsWith("res/") && path.endsWith(".xml") && xmlResourcePaths.size < 500) xmlResourcePaths += path
+                        if (path.endsWith(".so") && metadataBuffer != null) ApkMetadataReader.inspectElf(path, metadataBuffer.toByteArray())?.let(elfFiles::add)
                         if (isDex && headerBytes == DEX_HEADER_SIZE) {
                             parseDexHeader(path, header)?.let(dexDetails::add)
                             if (!dexTooLarge && dexBuffer != null) dexBrowse += DexTableReader.inspect(dexBuffer.toByteArray())
@@ -124,7 +138,10 @@ object ApkAnalyzer {
                 abiCounts = abiCounts.toSortedMap(),
                 entryNames = entryNames,
                 dexDetails = dexDetails,
-                dexBrowse = dexBrowse
+                dexBrowse = dexBrowse,
+                manifest = manifestSummary,
+                elfFiles = elfFiles.take(200),
+                xmlResourcePaths = xmlResourcePaths
             )
         } catch (error: Exception) {
             AnalysisResult(name, "", 0, 0, 0, 0, warning = error.message ?: "Analysis failed")
