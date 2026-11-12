@@ -7,6 +7,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
@@ -57,6 +59,12 @@ private fun AegisWorkbench() {
     var status by remember { mutableStateOf("WORKSPACE READY · STATIC MODE") }
     var pathQuery by remember { mutableStateOf("") }
     var pendingReport by remember { mutableStateOf("") }
+    var fileInfo by remember { mutableStateOf<GeneralFileInfo?>(null) }
+    var editorText by remember { mutableStateOf("") }
+    var editorName by remember { mutableStateOf("source.txt") }
+    var editorOpen by remember { mutableStateOf(false) }
+    var editorDiagnostics by remember { mutableStateOf<List<CodeDiagnostic>>(emptyList()) }
+    var pendingCode by remember { mutableStateOf("") }
     val reportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/html")) { uri ->
         if (uri != null) {
             runCatching {
@@ -65,6 +73,36 @@ private fun AegisWorkbench() {
         }
     }
 
+    val codeSaveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(pendingCode.toByteArray(Charsets.UTF_8)) } }
+    }
+    val anyFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            runCatching {
+                val loaded = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        val out = java.io.ByteArrayOutputStream()
+                        val buffer = ByteArray(8192)
+                        var total = 0
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            total += n
+                            require(total <= 2 * 1024 * 1024) { "File exceeds 2 MB inspection limit" }
+                            out.write(buffer, 0, n)
+                        }
+                        out.toByteArray()
+                    } ?: error("Cannot open selected file")
+                }
+                val name = uri.lastPathSegment?.substringAfterLast('/') ?: "selected-file"
+                fileInfo = FileInspector.inspect(name, loaded)
+                editorName = name
+                editorText = if (fileInfo?.isProbablyText == true) fileInfo?.textPreview.orEmpty() else ""
+                editorDiagnostics = emptyList()
+                status = "FILE INSPECTED · LOCAL ONLY"
+            }.onFailure { status = it.message ?: "File inspection failed" }
+        }
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
         val chosen = uris.take(50)
         results = emptyList()
@@ -103,6 +141,13 @@ private fun AegisWorkbench() {
                         Spacer(Modifier.width(4.dp))
                         Text("Open APK", fontSize = 10.sp)
                     }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = { anyFilePicker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(4.dp)) {
+                        Text("Inspect any file", fontSize = 10.sp)
+                    }
+                    OutlinedButton(onClick = { if (fileInfo?.isProbablyText == true) editorOpen = true else status = "OPEN A TEXT FILE FIRST" }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(4.dp)) {
+                        Text("Code editor", fontSize = 10.sp)
+                    }
                     Spacer(Modifier.height(12.dp))
                     Text("LOADED FILES · ${results.size}", color = Muted, fontSize = 9.sp)
                     LazyColumn {
@@ -122,6 +167,23 @@ private fun AegisWorkbench() {
                 }
                 Column(Modifier.weight(1.15f).fillMaxHeight().background(Panel, RoundedCornerShape(8.dp)).verticalScroll(rememberScrollState()).padding(12.dp)) {
                     Text("ANALYSIS OVERVIEW", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    fileInfo?.let { info ->
+                        Spacer(Modifier.height(10.dp))
+                        Text("GENERAL FILE INSPECTOR", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(info.name, color = MainText, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        WorkMetric("Detected type", info.detectedType)
+                        WorkMetric("Extension", info.extension.ifBlank { "none" })
+                        WorkMetric("Size", "${info.sizeBytes} bytes")
+                        Text("SHA-256", color = Muted, fontSize = 9.sp)
+                        Text(info.sha256, color = Accent, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                        Text("HEX PREVIEW · FIRST 128 BYTES", color = Muted, fontSize = 9.sp)
+                        Text(info.hexPreview, color = MainText, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                        if (info.isProbablyText) {
+                            Text("TEXT PREVIEW · FIRST 4 KB", color = Muted, fontSize = 9.sp)
+                            Text(info.textPreview.take(1200), color = MainText, fontSize = 9.sp, maxLines = 14)
+                            OutlinedButton(onClick = { editorOpen = true }) { Text("Edit text file") }
+                        } else Text("Binary file: not editable as text.", color = Amber, fontSize = 9.sp)
+                    }
                     Spacer(Modifier.height(10.dp))
                     if (busy) {
                         LinearProgressIndicator(Modifier.fillMaxWidth(), color = Accent)
@@ -270,6 +332,29 @@ private fun AegisWorkbench() {
             Row(Modifier.fillMaxWidth().background(Panel).padding(horizontal = 12.dp, vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("AEGISRE · STATIC INSPECTION ONLY", color = Muted, fontSize = 9.sp)
                 Text(if (busy) "BUSY" else "READY", color = Accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        if (editorOpen) {
+            Dialog(onDismissRequest = { editorOpen = false }) {
+                Surface(color = Panel, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("CODE WORKSPACE", color = Accent, fontWeight = FontWeight.Bold)
+                        Text(editorName, color = Muted, fontSize = 10.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(onClick = { editorDiagnostics = CodeDiagnostics.checkDelimiters(editorText) }) { Text("Check delimiters", fontSize = 10.sp) }
+                            Button(onClick = {
+                                pendingCode = editorText
+                                val ext = editorName.substringAfterLast('.', "txt")
+                                codeSaveLauncher.launch(editorName.substringBeforeLast('.', editorName) + "-edited." + ext)
+                            }) { Text("Save copy", fontSize = 10.sp) }
+                        }
+                        editorDiagnostics.forEach { d -> Text("Line ${d.line}: ${d.message}", color = Amber, fontSize = 10.sp) }
+                        Text("Delimiter check only; not a compiler or full error fixer.", color = Muted, fontSize = 9.sp)
+                        BasicTextField(value = editorText, onValueChange = { editorText = it },
+                            modifier = Modifier.fillMaxSize().background(Bg, RoundedCornerShape(6.dp)).padding(8.dp),
+                            textStyle = androidx.compose.ui.text.TextStyle(color = MainText, fontFamily = FontFamily.Monospace, fontSize = 11.sp))
+                    }
+                }
             }
         }
     }
