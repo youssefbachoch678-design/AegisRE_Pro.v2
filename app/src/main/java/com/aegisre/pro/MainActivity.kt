@@ -165,7 +165,7 @@ private fun AegisWorkbench() {
                                 Text("MANIFEST INSPECTOR", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 val manifest = result.manifest
                                 if (manifest == null) Text("AndroidManifest.xml not found", color = Muted, fontSize = 10.sp)
-                                else if (manifest.isBinaryXml) Text("Binary AndroidManifest detected · decoded attributes require a binary XML parser", color = Amber, fontSize = 10.sp)
+                                else if (manifest.isBinaryXml) Text("Binary AndroidManifest decoded · attributes may omit resource-resolved values", color = Amber, fontSize = 10.sp)
                                 else {
                                     WorkMetric("Package", manifest.packageName ?: "Unknown")
                                     WorkMetric("Version", manifest.versionName ?: "Unknown")
