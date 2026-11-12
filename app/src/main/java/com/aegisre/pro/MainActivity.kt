@@ -97,7 +97,7 @@ private fun AegisWorkbench() {
                 val name = uri.lastPathSegment?.substringAfterLast('/') ?: "selected-file"
                 fileInfo = FileInspector.inspect(name, loaded)
                 editorName = name
-                editorText = if (fileInfo?.isProbablyText == true) fileInfo?.textPreview.orEmpty() else ""
+                editorText = if (fileInfo?.isProbablyText == true) loaded.toString(Charsets.UTF_8) else ""
                 editorDiagnostics = emptyList()
                 status = "FILE INSPECTED · LOCAL ONLY"
             }.onFailure { status = it.message ?: "File inspection failed" }
