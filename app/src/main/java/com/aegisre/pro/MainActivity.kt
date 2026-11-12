@@ -50,6 +50,7 @@ private fun AegisWorkbench() {
     var selected by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("WORKSPACE READY · STATIC MODE") }
+    var pathQuery by remember { mutableStateOf("") }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
         val chosen = uris.take(50)
@@ -155,6 +156,29 @@ private fun AegisWorkbench() {
                                     }
                                 }
                                 Spacer(Modifier.height(12.dp))
+                                Text("MANIFEST INSPECTOR", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                val manifest = result.manifest
+                                if (manifest == null) Text("AndroidManifest.xml not found", color = Muted, fontSize = 10.sp)
+                                else if (manifest.isBinaryXml) Text("Binary AndroidManifest detected · decoded attributes require a binary XML parser", color = Amber, fontSize = 10.sp)
+                                else {
+                                    WorkMetric("Package", manifest.packageName ?: "Unknown")
+                                    WorkMetric("Version", manifest.versionName ?: "Unknown")
+                                    Text("PERMISSIONS · ${manifest.usesPermissions.size}", color = Muted, fontSize = 9.sp)
+                                    manifest.usesPermissions.take(30).forEach { Text(it, color = MainText, fontSize = 9.sp, fontFamily = FontFamily.Monospace) }
+                                    Text("COMPONENTS · ${manifest.declaredComponents.size}", color = Muted, fontSize = 9.sp)
+                                    manifest.declaredComponents.take(30).forEach { Text(it, color = MainText, fontSize = 9.sp, fontFamily = FontFamily.Monospace) }
+                                }
+                                Spacer(Modifier.height(12.dp))
+                                Text("NATIVE ELF INSPECTOR · ${result.elfFiles.size}", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                result.elfFiles.take(50).forEach { elf ->
+                                    Text(elf.path, color = MainText, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                                    WorkMetric("Format", "${elf.bitness} · ${elf.machine}")
+                                    WorkMetric("ELF", "${elf.fileType} · ${elf.endianness}")
+                                }
+                                Spacer(Modifier.height(12.dp))
+                                Text("XML RESOURCE FILES · ${result.xmlResourcePaths.size}", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                result.xmlResourcePaths.take(50).forEach { Text(it, color = MainText, fontSize = 9.sp, fontFamily = FontFamily.Monospace) }
+                                Spacer(Modifier.height(12.dp))
                                 Text("NATIVE ABI TARGETS", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 if (result.abiCounts.isEmpty()) Text("No .so libraries detected", color = Muted, fontSize = 11.sp)
                                 result.abiCounts.forEach { (abi, count) -> WorkMetric(abi, "$count libraries") }
@@ -171,8 +195,11 @@ private fun AegisWorkbench() {
                     Spacer(Modifier.height(8.dp))
                     if (result == null) Text("File paths appear here after analysis.", color = Muted, fontSize = 11.sp) else {
                         Text("${result.entryNames.size} paths recorded · up to 2,000", color = Muted, fontSize = 9.sp)
+                        OutlinedTextField(value = pathQuery, onValueChange = { pathQuery = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Search paths", fontSize = 10.sp) })
+                        val visiblePaths = result.entryNames.filter { it.contains(pathQuery, ignoreCase = true) }
+                        Text("${visiblePaths.size} matches", color = Muted, fontSize = 9.sp)
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            items(result.entryNames) { path ->
+                            items(visiblePaths) { path ->
                                 Text("› $path", color = if (path.endsWith(".dex") || path.endsWith(".so")) Accent else MainText, fontSize = 9.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
                             }
                         }
