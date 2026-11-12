@@ -27,7 +27,16 @@ data class ManifestSummary(
     val components: List<ManifestComponent> = emptyList()
 )
 
-data class CertificateSummary(\n    val path: String,\n    val subject: String,\n    val issuer: String,\n    val validFrom: String,\n    val validUntil: String,\n    val sha256: String\n)\n\ndata class ElfSummary(
+data class CertificateSummary(
+    val path: String,
+    val subject: String,
+    val issuer: String,
+    val validFrom: String,
+    val validUntil: String,
+    val sha256: String
+)
+
+data class ElfSummary(
     val path: String,
     val bitness: String,
     val endianness: String,
