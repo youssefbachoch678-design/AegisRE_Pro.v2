@@ -209,6 +209,18 @@ private fun AegisWorkbench() {
                                     WorkMetric("ELF", "${elf.fileType} · ${elf.endianness}")
                                 }
                                 Spacer(Modifier.height(12.dp))
+                                Text("SIGNING CERTIFICATES · ${result.certificates.size}", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                if (result.certificates.isEmpty()) Text("No v1 META-INF certificate candidate found. APK v2/v3 signing-block verification is not implemented.", color = Muted, fontSize = 9.sp)
+                                result.certificates.forEach { cert ->
+                                    Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                                        Text(cert.path, color = MainText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        Text("Subject: ${cert.subject}", color = Muted, fontSize = 9.sp)
+                                        Text("Issuer: ${cert.issuer}", color = Muted, fontSize = 9.sp)
+                                        Text("Valid: ${cert.validFrom} → ${cert.validUntil}", color = Muted, fontSize = 9.sp)
+                                        Text("Certificate SHA-256: ${cert.sha256}", color = Accent, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                                    }
+                                }
+                                Spacer(Modifier.height(12.dp))
                                 Text("XML RESOURCE FILES · ${result.xmlResourcePaths.size}", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 result.xmlResourcePaths.take(50).forEach { Text(it, color = MainText, fontSize = 9.sp, fontFamily = FontFamily.Monospace) }
                                 Spacer(Modifier.height(12.dp))
