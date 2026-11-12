@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
@@ -22,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -73,7 +75,7 @@ private fun AegisWorkbench() {
     MaterialTheme(colorScheme = darkColorScheme(background = Bg, surface = Panel, primary = Accent, onBackground = MainText, onSurface = MainText)) {
         Column(Modifier.fillMaxSize().background(Bg)) {
             Row(Modifier.fillMaxWidth().background(Panel).padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Security, null, tint = Accent, modifier = Modifier.size(27.dp))
+                Image(painter = painterResource(R.drawable.ic_launcher_foreground), contentDescription = "AegisRE shield gear logo", modifier = Modifier.size(36.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text("AEGISRE PRO", color = MainText, fontWeight = FontWeight.Black, fontSize = 17.sp)
