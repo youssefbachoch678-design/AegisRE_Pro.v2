@@ -173,6 +173,33 @@ private fun AegisWorkbench() {
                                     manifest.usesPermissions.take(30).forEach { Text(it, color = MainText, fontSize = 9.sp, fontFamily = FontFamily.Monospace) }
                                     Text("COMPONENTS · ${manifest.declaredComponents.size}", color = Muted, fontSize = 9.sp)
                                     manifest.declaredComponents.take(30).forEach { Text(it, color = MainText, fontSize = 9.sp, fontFamily = FontFamily.Monospace) }
+                                    WorkMetric("Cleartext permitted", manifest.cleartextTrafficPermitted?.toString() ?: "Not specified")
+                                    WorkMetric("Debuggable", manifest.debuggable?.toString() ?: "Not specified")
+                                    WorkMetric("Backup enabled", manifest.allowBackup?.toString() ?: "Not specified")
+                                    WorkMetric("Network config", if (manifest.hasNetworkSecurityConfig) "Referenced · content not parsed" else "Not referenced")
+                                }
+                                Spacer(Modifier.height(12.dp))
+                                Text("SECURITY FINDINGS · ${result.securityFindings.size}", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                if (result.securityFindings.isEmpty()) {
+                                    Text("No matches from the current limited ruleset. This is not proof that the APK is secure.", color = Muted, fontSize = 10.sp)
+                                }
+                                result.securityFindings.forEach { finding ->
+                                    val severityColor = when (finding.severity) {
+                                        FindingSeverity.CRITICAL, FindingSeverity.HIGH -> Color(0xFFFF7777)
+                                        FindingSeverity.MEDIUM -> Amber
+                                        FindingSeverity.LOW -> Accent
+                                        FindingSeverity.INFO -> Muted
+                                    }
+                                    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp).background(Panel2, RoundedCornerShape(6.dp)).padding(8.dp)) {
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text(finding.title, color = MainText, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                            Text(finding.severity.name, color = severityColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                        Text("Confidence: ${finding.confidence}", color = Muted, fontSize = 9.sp)
+                                        Text("Evidence: ${finding.evidence}", color = MainText, fontSize = 9.sp)
+                                        Text(finding.explanation, color = Muted, fontSize = 9.sp)
+                                        Text("Fix: ${finding.remediation}", color = Accent, fontSize = 9.sp)
+                                    }
                                 }
                                 Spacer(Modifier.height(12.dp))
                                 Text("NATIVE ELF INSPECTOR · ${result.elfFiles.size}", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
