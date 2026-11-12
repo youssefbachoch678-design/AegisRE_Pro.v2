@@ -64,6 +64,28 @@ object SecurityRulesEngine {
                     remediation = "Disable debuggable in release builds and verify the final release manifest."
                 )
             }
+            manifest.components.filter { it.exported == true }.forEach { component ->
+                findings += SecurityFinding(
+                    id = "COMPONENT:${component.type}:${component.name}",
+                    title = "Exported Android component",
+                    severity = FindingSeverity.MEDIUM,
+                    confidence = "CONFIRMED_EXPORTED_FLAG",
+                    evidence = "${component.type} ${component.name} declares android:exported=true",
+                    explanation = "Other apps may be able to address this component. Exported components are not automatically vulnerable; access controls and intent handling determine the actual risk.",
+                    remediation = "Set exported=false when external access is unnecessary. Otherwise enforce permissions and validate all incoming intents and data."
+                )
+            }
+            if (manifest.hasNetworkSecurityConfig) {
+                findings += SecurityFinding(
+                    id = "MANIFEST:NETWORK_CONFIG",
+                    title = "Network Security Config is referenced",
+                    severity = FindingSeverity.INFO,
+                    confidence = "CONFIRMED_REFERENCE",
+                    evidence = "android:networkSecurityConfig is present in the application tag",
+                    explanation = "A configuration file is referenced, but its contents are not yet parsed by this version.",
+                    remediation = "Review the referenced XML for cleartext exceptions, trusted user certificates, and unintended trust anchors."
+                )
+            }
             if (manifest.allowBackup == true) {
                 findings += SecurityFinding(
                     id = "MANIFEST:BACKUP",
