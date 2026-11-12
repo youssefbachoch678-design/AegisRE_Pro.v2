@@ -24,7 +24,13 @@ object DexTableReader {
             require(bytes.size >= HEADER_SIZE) { "DEX header is truncated" }
             val b = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
             require(bytes[0] == 'd'.code.toByte() && bytes[1] == 'e'.code.toByte() &&
-                bytes[2] == 'x'.code.toByte() && bytes[3] == 10.toByte()) { "Invalid DEX magic" }
+                bytes[2] == 'x'.code.toByte() && bytes[3] == 10.toByte() && bytes[7] == 0.toByte()
+            ) { "Invalid DEX magic" }
+
+            val fileSize = u32(b, 32)
+            require(fileSize in HEADER_SIZE.toLong()..bytes.size.toLong()) { "Invalid DEX file_size" }
+            require(u32(b, 36) == HEADER_SIZE.toLong()) { "Unsupported DEX header_size" }
+            require(u32(b, 40) == 0x12345678L) { "Unsupported DEX endian tag" }
 
             val stringCount = count(b, 56)
             val stringOff = offset(b, 60)
@@ -37,28 +43,30 @@ object DexTableReader {
 
             require(stringCount <= MAX_ITEMS && typeCount <= MAX_ITEMS &&
                 methodCount <= MAX_ITEMS && classCount <= MAX_ITEMS) { "DEX table exceeds safety limit" }
-            checkTable(bytes, stringOff, stringCount, 4)
-            checkTable(bytes, typeOff, typeCount, 4)
-            checkTable(bytes, methodOff, methodCount, 8)
-            checkTable(bytes, classOff, classCount, 32)
+            checkTable(fileSize, stringOff, stringCount, 4)
+            checkTable(fileSize, typeOff, typeCount, 4)
+            checkTable(fileSize, methodOff, methodCount, 8)
+            checkTable(fileSize, classOff, classCount, 32)
 
             val strings = ArrayList<String>(stringCount)
             repeat(stringCount) { i ->
                 val dataOff = u32(b, stringOff + i * 4)
                 require(dataOff <= Int.MAX_VALUE.toLong()) { "DEX string offset is too large" }
-                strings += readDexString(bytes, dataOff.toInt())
+                strings += readDexString(bytes, fileSize.toInt(), dataOff.toInt())
             }
 
             val types = ArrayList<String>(typeCount)
             repeat(typeCount) { i ->
                 val descriptorIndex = u32(b, typeOff + i * 4)
-                types += strings.getOrElse(descriptorIndex.toInt()) { "<invalid-string-index>" }
+                require(descriptorIndex < strings.size.toLong()) { "DEX type descriptor index is invalid" }
+                types += strings[descriptorIndex.toInt()]
             }
 
             val classes = ArrayList<String>()
             repeat(classCount) { i ->
                 val typeIndex = u32(b, classOff + i * 32)
-                classes += types.getOrElse(typeIndex.toInt()) { "<invalid-type-index>" }
+                require(typeIndex < types.size.toLong()) { "DEX class type index is invalid" }
+                classes += types[typeIndex.toInt()]
             }
 
             val methods = ArrayList<String>()
@@ -66,9 +74,9 @@ object DexTableReader {
                 val item = methodOff + i * 8
                 val classIndex = u16(b, item)
                 val nameIndex = u32(b, item + 4)
-                val owner = types.getOrElse(classIndex) { "<invalid-owner>" }
-                val method = strings.getOrElse(nameIndex.toInt()) { "<invalid-name>" }
-                methods += "$owner->$method"
+                require(classIndex < types.size) { "DEX method owner index is invalid" }
+                require(nameIndex < strings.size.toLong()) { "DEX method name index is invalid" }
+                methods += "${types[classIndex]}->${strings[nameIndex.toInt()]}"
             }
 
             DexBrowseResult(
@@ -106,26 +114,56 @@ object DexTableReader {
         return b.getShort(offset).toInt() and 0xffff
     }
 
-    private fun checkTable(bytes: ByteArray, offset: Int, count: Int, itemSize: Int) {
+    private fun checkTable(fileSize: Long, offset: Int, count: Int, itemSize: Int) {
         if (count == 0) return
-        require(offset >= HEADER_SIZE && offset.toLong() + count.toLong() * itemSize <= bytes.size.toLong()) {
+        require(offset >= HEADER_SIZE && offset.toLong() + count.toLong() * itemSize <= fileSize) {
             "DEX table points outside file"
         }
     }
 
-    private fun readDexString(bytes: ByteArray, offset: Int): String {
-        require(offset in HEADER_SIZE until bytes.size) { "DEX string offset out of bounds" }
+    /** Decode DEX MUTF-8 using the declared UTF-16 code-unit length. */
+    private fun readDexString(bytes: ByteArray, fileSize: Int, offset: Int): String {
+        require(offset in HEADER_SIZE until fileSize) { "DEX string offset out of bounds" }
         var cursor = offset
+        var encodedLength = 0
         var shift = 0
         while (true) {
-            require(cursor < bytes.size && shift <= 28) { "Invalid DEX string length" }
+            require(cursor < fileSize && shift <= 28) { "Invalid DEX string length" }
             val value = bytes[cursor++].toInt() and 0xff
+            encodedLength = encodedLength or ((value and 0x7f) shl shift)
             if (value and 0x80 == 0) break
             shift += 7
         }
-        val start = cursor
-        while (cursor < bytes.size && bytes[cursor].toInt() != 0) cursor++
-        require(cursor < bytes.size) { "Unterminated DEX string" }
-        return String(bytes, start, cursor - start, Charsets.UTF_8)
+        require(encodedLength in 0..65_535) { "DEX string is too long" }
+        val chars = CharArray(encodedLength)
+        var out = 0
+        while (true) {
+            require(cursor < fileSize) { "Unterminated DEX string" }
+            val first = bytes[cursor++].toInt() and 0xff
+            if (first == 0) break
+            val codeUnit = when {
+                first and 0x80 == 0 -> first
+                first and 0xe0 == 0xc0 -> {
+                    require(cursor < fileSize) { "Truncated MUTF-8 sequence" }
+                    val second = bytes[cursor++].toInt() and 0xff
+                    require(second and 0xc0 == 0x80) { "Invalid MUTF-8 continuation byte" }
+                    ((first and 0x1f) shl 6) or (second and 0x3f)
+                }
+                first and 0xf0 == 0xe0 -> {
+                    require(cursor + 1 < fileSize) { "Truncated MUTF-8 sequence" }
+                    val second = bytes[cursor++].toInt() and 0xff
+                    val third = bytes[cursor++].toInt() and 0xff
+                    require(second and 0xc0 == 0x80 && third and 0xc0 == 0x80) {
+                        "Invalid MUTF-8 continuation bytes"
+                    }
+                    ((first and 0x0f) shl 12) or ((second and 0x3f) shl 6) or (third and 0x3f)
+                }
+                else -> error("Invalid MUTF-8 leading byte")
+            }
+            require(out < encodedLength) { "DEX string exceeds declared UTF-16 length" }
+            chars[out++] = codeUnit.toChar()
+        }
+        require(out == encodedLength) { "DEX string length does not match its UTF-16 length" }
+        return String(chars)
     }
 }
