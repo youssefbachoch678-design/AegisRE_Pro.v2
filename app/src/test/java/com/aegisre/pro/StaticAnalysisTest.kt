@@ -65,12 +65,15 @@ class StaticAnalysisTest {
     }
 
     @Test fun detectsUnclosedOpeningDelimiter() {
-        val diagnostics = CodeDiagnostics.checkDelimiters("fun main() {\\n println(1)\\n")
+        val diagnostics = CodeDiagnostics.checkDelimiters("""fun main() {
+ println(1)
+""")
         assertTrue(diagnostics.any { it.message.contains("no matching close") })
     }
 
     @Test fun ignoresDelimitersInsideStringAndComments() {
-        val source = "val text = \\"{[()]}\\" // }\\n/* { */"
+        val source = """val text = "{[()]}" // }
+/* { */"""
         assertTrue(CodeDiagnostics.checkDelimiters(source).isEmpty())
     }
 
