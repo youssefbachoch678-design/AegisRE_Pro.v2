@@ -33,6 +33,28 @@ data class ElfSummary(
 
 object ApkMetadataReader {
     fun inspectManifest(bytes: ByteArray): ManifestSummary {
+        if (bytes.size >= 2 && bytes[0] == 0x03.toByte() && bytes[1] == 0x00.toByte()) {
+            return try {
+                val elements = BinaryXmlReader.read(bytes)
+                val manifest = elements.firstOrNull { it.name == "manifest" }?.attributes.orEmpty()
+                val app = elements.firstOrNull { it.name == "application" }?.attributes.orEmpty()
+                val permissions = elements.filter { it.name.startsWith("uses-permission") }
+                    .mapNotNull { it.attributes["name"] }.distinct().take(300)
+                val componentTypes = setOf("activity", "activity-alias", "service", "receiver", "provider")
+                val components = elements.filter { it.name in componentTypes }.mapNotNull { e ->
+                    val name = e.attributes["name"] ?: return@mapNotNull null
+                    ManifestComponent(e.name, name, e.attributes["exported"]?.toBooleanStrictOrNull(), e.attributes["permission"])
+                }.take(300)
+                ManifestSummary(manifest["package"], manifest["versionName"], permissions,
+                    components.map { "${it.type}: ${it.name}" }.distinct(), true,
+                    app["usesCleartextTraffic"]?.toBooleanStrictOrNull(),
+                    app["debuggable"]?.toBooleanStrictOrNull(),
+                    app["allowBackup"]?.toBooleanStrictOrNull(),
+                    app.containsKey("networkSecurityConfig"), components)
+            } catch (_: Exception) {
+                ManifestSummary(null, null, emptyList(), emptyList(), true)
+            }
+        }
         val text = bytes.toString(Charsets.UTF_8)
         if (!text.trimStart().startsWith("<?xml") && !text.trimStart().startsWith("<manifest")) {
             return ManifestSummary(null, null, emptyList(), emptyList(), true)
