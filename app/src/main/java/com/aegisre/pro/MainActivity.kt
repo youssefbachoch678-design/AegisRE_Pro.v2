@@ -137,6 +137,24 @@ private fun AegisWorkbench() {
                                     WorkMetric("  Types / strings", "${dexInfo.typeCount} / ${dexInfo.stringCount}")
                                 }
                                 Spacer(Modifier.height(12.dp))
+                                Text("DEX EXPLORER · FIRST 500 ITEMS", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                result.dexBrowse.forEachIndexed { dexIndex, browse ->
+                                    Text("DEX #${dexIndex + 1}", color = MainText, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    browse.warning?.let { Text(it, color = Amber, fontSize = 9.sp) }
+                                    Text("CLASSES · ${browse.classNames.size}", color = Muted, fontSize = 9.sp)
+                                    browse.classNames.take(80).forEach { item ->
+                                        Text(item, color = MainText, fontSize = 9.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
+                                    }
+                                    Text("METHOD REFERENCES · ${browse.methodNames.size}", color = Muted, fontSize = 9.sp)
+                                    browse.methodNames.take(80).forEach { item ->
+                                        Text(item, color = Accent, fontSize = 9.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
+                                    }
+                                    Text("STRING SAMPLES · ${browse.stringSamples.size}", color = Muted, fontSize = 9.sp)
+                                    browse.stringSamples.take(40).forEach { item ->
+                                        Text(item, color = MainText, fontSize = 9.sp, maxLines = 1)
+                                    }
+                                }
+                                Spacer(Modifier.height(12.dp))
                                 Text("NATIVE ABI TARGETS", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 if (result.abiCounts.isEmpty()) Text("No .so libraries detected", color = Muted, fontSize = 11.sp)
                                 result.abiCounts.forEach { (abi, count) -> WorkMetric(abi, "$count libraries") }
