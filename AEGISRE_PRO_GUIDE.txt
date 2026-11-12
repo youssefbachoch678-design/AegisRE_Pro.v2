@@ -16,14 +16,15 @@ CURRENT FEATURES
 - Open one or more APK files using Android's document picker.
 - Read the APK as a ZIP archive without installing or launching it.
 - Count DEX files, native shared libraries, assets, and ZIP entries.
+- Read validated DEX header/table metadata and display capped class descriptors, method references, and string samples for DEX files within the inspection-size limit.
 - Identify native library ABI folders.
 - Calculate the APK SHA-256 fingerprint.
 - Display a limited list of internal file paths.
 - Apply file-size, expanded-data, and entry-count limits to reduce resource-exhaustion risk.
 
 PLANNED ANALYSIS MODULES
-1. DEX Explorer: inspect DEX headers and metadata, then browse classes, methods, and fields.
-2. Smali Viewer: display disassembled code as readable text.
+1. Full DEX Explorer: richer class/method/field browsing, cross-reference navigation, and code-item inspection.
+2. Smali Viewer: complete instruction-level disassembly is still planned; the current reader displays table metadata and references, not full Smali.
 3. Manifest Inspector: inspect package metadata, permissions, and declared components.
 4. Resource Browser: inspect resource names and XML files.
 5. Native Library Inspector: inspect ELF metadata and ABI information.
@@ -34,6 +35,7 @@ Where practical, compatible open-source libraries will be bundled with the appli
 
 LIMITATIONS
 - Features listed as planned are not necessarily available in the current build.
+- Current DEX table inspection is intentionally limited to the first 500 displayed items per category and a 24 MB per-file parsing cap; method entries are DEX method references, not a guarantee that every method is defined by the APK.
 - Static analysis cannot prove that an app is safe or malicious.
 - Some APK formats, obfuscation methods, or unusual files may limit what can be displayed.
 - Analysis limits may cause very large APKs to be rejected.
